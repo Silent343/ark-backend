@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: teluria-backend
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_CA_PATH
+        sync: false
+      - key: TELURIA_ALLOWED_ORIGINS
+        sync: false
+      - key: TELURIA_FRONTEND_URL
+        sync: false
+      - key: TELURIA_OWNER_EMAIL
+        sync: false

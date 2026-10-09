@@ -1,0 +1,25 @@
+{
+  "name": "teluria-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone REST API for the Teluria workspace",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "test:contract": "node scripts/verify-frontend-contract.mjs",
+    "db:migrate": "node src/shared/infrastructure/postgres/migrate.js",
+    "db:import": "node src/shared/infrastructure/postgres/import-data.js"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.15"
+  }
+}
