@@ -16,10 +16,20 @@ const resolveFromRoot = (value) =>
   path.isAbsolute(value) ? value : path.resolve(root, value);
 
 const production = process.env.NODE_ENV === "production";
+const databaseUrl = process.env.DATABASE_URL || "";
+const databasePoolSize = Number(process.env.DATABASE_POOL_SIZE || 5);
 if (production && process.env.TELURIA_TEST_MODE === "1")
   throw new Error("TELURIA_TEST_MODE cannot be enabled in production.");
-if (production && (!process.env.TELURIA_ALLOWED_ORIGINS || !process.env.TELURIA_FRONTEND_URL || !process.env.TELURIA_OWNER_EMAIL))
-  throw new Error("Production requires TELURIA_ALLOWED_ORIGINS, TELURIA_FRONTEND_URL and TELURIA_OWNER_EMAIL.");
+if (production && (!databaseUrl || !process.env.TELURIA_ALLOWED_ORIGINS || !process.env.TELURIA_FRONTEND_URL || !process.env.TELURIA_OWNER_EMAIL))
+  throw new Error("Production requires DATABASE_URL, TELURIA_ALLOWED_ORIGINS, TELURIA_FRONTEND_URL and TELURIA_OWNER_EMAIL.");
+if (databaseUrl) {
+  let parsedDatabaseUrl;
+  try { parsedDatabaseUrl = new URL(databaseUrl); } catch { throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL."); }
+  if (!["postgres:", "postgresql:"].includes(parsedDatabaseUrl.protocol))
+    throw new Error("DATABASE_URL must use postgres:// or postgresql://.");
+}
+if (!Number.isInteger(databasePoolSize) || databasePoolSize < 1 || databasePoolSize > 20)
+  throw new Error("DATABASE_POOL_SIZE must be an integer from 1 to 20.");
 const origins = (process.env.TELURIA_ALLOWED_ORIGINS || "http://localhost:3000,http://127.0.0.1:3000")
   .split(",")
   .map((value) => value.trim().replace(/\/$/, ""))
@@ -37,9 +47,9 @@ export const config = Object.freeze({
   root,
   host: process.env.HOST || "0.0.0.0",
   port: Number(process.env.PORT || 8000),
-  databaseUrl: process.env.DATABASE_URL || "",
+  databaseUrl,
   databaseCaPath: process.env.DATABASE_CA_PATH || "",
-  poolSize: Number(process.env.DATABASE_POOL_SIZE || 5),
+  poolSize: databasePoolSize,
   testMode: process.env.TELURIA_TEST_MODE === "1",
   production,
   allowedOrigins: new Set(origins),

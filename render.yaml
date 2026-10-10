@@ -1,15 +1,25 @@
 services:
   - type: web
-    name: teluria-backend
+    # Import this Blueprint from Render after the repository is connected.
+    # Secrets remain in Render and never enter Git.
+    name: ark-api
     runtime: node
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 30
     envVars:
+      # Pin the runtime used by Render independently from a developer machine.
+      - key: NODE_VERSION
+        value: 22.5.1
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
         sync: false
+      # The API is a long-lived service: use Supabase Session Pooler (port 5432).
+      - key: DATABASE_POOL_SIZE
+        value: "5"
       - key: DATABASE_CA_PATH
         sync: false
       - key: TELURIA_ALLOWED_ORIGINS
