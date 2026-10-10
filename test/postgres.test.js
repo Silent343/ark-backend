@@ -71,10 +71,15 @@ test("PostgreSQL relations and API workflow", async () => {
   expectStatus(await api("/users", { method: "POST", origin: "https://evil.example", body: {} }), 403);
   const unauthenticated = await api("/projects");
   expectStatus(unauthenticated, 401);
-  const owner = await api("/users", { method: "POST", body: { name: "Owner", email: "owner@example.test", password: "test-password-2026" } });
+  expectStatus(await api("/users", { method: "POST", body: { name: "Owner", email: "owner@example.test", password: "test-password-2026" } }), 422);
+  const owner = await api("/users", { method: "POST", body: { name: "Owner", email: "owner@example.test", password: "test-password-2026", terms_accepted: true, privacy_accepted: true } });
   const ownerId = expectStatus(owner, 201).user.id;
-  assert.match(owner.headers.get("set-cookie"), /HttpOnly/);
-  const cookie = owner.cookie;
+  assert.match(owner.headers.get("set-cookie"), /ark_session=.*HttpOnly/);
+  assert.doesNotMatch(owner.headers.get("set-cookie"), /Max-Age/);
+  const remembered = await api("/sessions", { method: "POST", body: { email: "owner@example.test", password: "test-password-2026", remember_me: true } });
+  expectStatus(remembered, 200);
+  assert.match(remembered.headers.get("set-cookie"), /Max-Age=2592000/);
+  const cookie = remembered.cookie;
   const project = expectStatus(await api("/projects", { method: "POST", cookie, body: { name: "Project", location: "Lima", floors: 1, floor_height: 2.8, structure_type: "Concrete", soil_type: "Dense sand" } }), 201);
   const rootPath = `/projects/${project.id}`;
   const taskInput = { title: "Review", description: "", status: "todo", priority: "high", assignee: "Owner", due_date: "2026-12-01", discipline: "architecture" };
@@ -92,7 +97,7 @@ test("PostgreSQL relations and API workflow", async () => {
   const audit = expectStatus(await api(`${rootPath}/audit-entries`, { cookie }), 200);
   assert(audit.some((entry) => entry.resource === "approvals"));
   const invitation = expectStatus(await api(`${rootPath}/invitations`, { method: "POST", cookie, body: { email: "teammate@example.test", role: "collaborator" } }), 201);
-  const teammateRegistration = await api("/users", { method: "POST", body: { name: "Teammate", email: "teammate@example.test", password: "test-password-2026" } });
+  const teammateRegistration = await api("/users", { method: "POST", body: { name: "Teammate", email: "teammate@example.test", password: "test-password-2026", terms_accepted: true, privacy_accepted: true } });
   const teammate = expectStatus(teammateRegistration, 201);
   const token = new URL(invitation.invitation_url).pathname.split("/").pop();
   expectStatus(await api(`/invitations/${token}`, { method: "POST", cookie: teammateRegistration.cookie, body: {} }), 200);

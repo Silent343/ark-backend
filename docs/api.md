@@ -25,4 +25,12 @@ Las rutas usan sustantivos plurales en kebab-case. Los campos JSON usan snake_ca
 
 La columna de API omite el prefijo `/api/v1/projects/{id}` después de la primera fila. `GET` lista o lee, `POST` crea, `PATCH` actualiza y `DELETE` elimina donde el dominio lo permite. Una creación devuelve `201` y `Location`; una eliminación devuelve `204`. Los registros individuales devuelven `ETag`; `PATCH`/`DELETE` requieren `If-Match` (`428` si falta, `409` si la revisión cambió). `audit-entries` y `activities` son solo lectura. `change-log` se acepta temporalmente como alias de `audit-entries` para clientes antiguos.
 
-Autenticación: `POST /api/v1/users` registra una cuenta, `GET/POST/DELETE /api/v1/sessions` consulta, inicia o cierra sesión. `GET/POST /api/v1/invitations/{token}` inspecciona o acepta una invitación. Todas las rutas de proyecto exigen sesión y pertenencia; la política de roles se aplica en el servidor. Las rutas de herramientas como `/editor` son vistas web, no recursos CRUD.
+## Identidad y acceso
+
+`POST /api/v1/users` registra una cuenta con `name`, `email`, `password`, `terms_accepted: true` y `privacy_accepted: true`. La API conserva la fecha y la versión aceptada de ambos documentos; si falta un consentimiento devuelve `422`.
+
+`POST /api/v1/sessions` recibe `email`, `password` y el booleano opcional `remember_me`. Sin recordatorio, la sesión del servidor vence en 12 horas y la cookie desaparece al cerrar el navegador. Con `remember_me: true`, ambos vencen en 30 días. La contraseña nunca se devuelve ni se conserva en el navegador. `GET /api/v1/sessions` consulta la identidad actual y `DELETE /api/v1/sessions` cierra la sesión.
+
+La cookie canónica es `ark_session`, `HttpOnly`, `SameSite=Lax` y `Secure` en producción. Durante la transición se acepta `teluria_session` para no invalidar sesiones anteriores y el cierre elimina ambas cookies.
+
+`GET/POST /api/v1/invitations/{token}` inspecciona o acepta una invitación. Todas las rutas de proyecto exigen sesión y pertenencia; la política de roles se aplica en el servidor. Las rutas de herramientas como `/editor` son vistas web, no recursos CRUD.

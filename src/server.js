@@ -130,9 +130,12 @@ export function createServer(pool) {
         { testMode: config.testMode, ownerEmail: process.env.TELURIA_OWNER_EMAIL?.trim().toLowerCase(), throttle },
       );
       const cookie = result.sessionToken
-        ? `teluria_session=${result.sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 86400}${config.production ? "; Secure" : ""}`
+        ? `ark_session=${result.sessionToken}; Path=/; HttpOnly; SameSite=Lax${result.sessionMaxAge ? `; Max-Age=${result.sessionMaxAge}` : ""}${config.production ? "; Secure" : ""}`
         : result.clearCookie
-          ? `teluria_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${config.production ? "; Secure" : ""}`
+          ? [
+              `ark_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${config.production ? "; Secure" : ""}`,
+              `teluria_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${config.production ? "; Secure" : ""}`,
+            ]
           : undefined;
       json(response, result.status || 200, { data: result.data }, { ...common, ...(cookie ? { "Set-Cookie": cookie } : {}) });
       return;

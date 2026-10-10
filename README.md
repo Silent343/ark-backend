@@ -41,7 +41,7 @@ El dominio no importa infraestructura. Los casos de uso reciben un repositorio t
 
 Las tablas residen en el esquema privado `teluria`. Proyectos, usuarios, miembros, tareas, versiones, aprobaciones, dependencias, paquetes y destinatarios tienen claves foráneas y restricciones de unicidad. Las asociaciones polimórficas de bitácora y notificaciones conservan identificadores históricos incluso después de borrar un recurso. Las referencias a elementos del plano se verifican dentro del agregado `blueprint`, pues no son filas independientes.
 
-La API usa contraseñas con scrypt, tokens de sesión almacenados como hash, cookie HttpOnly/SameSite, límites de login persistidos en PostgreSQL, permisos por proyecto y rol, ETags/`If-Match`, validación de cuerpos JSON, un límite de 4,3 MB por solicitud y CORS de orígenes explícitos. El código no contiene claves de Supabase.
+La API usa contraseñas con scrypt, tokens de sesión almacenados como hash, cookie `ark_session` HttpOnly/SameSite, límites de login persistidos en PostgreSQL, permisos por proyecto y rol, ETags/`If-Match`, validación de cuerpos JSON, un límite de 4,3 MB por solicitud y CORS de orígenes explícitos. El registro exige aceptar términos y privacidad. “Recordarme” prolonga la sesión a 30 días; sin esa opción la cookie termina con el navegador y la sesión vence en 12 horas. Ninguna contraseña se almacena en el navegador. El código no contiene claves de Supabase.
 
 Para la nomenclatura REST y el mapa de vistas del frontend, consulta [docs/api.md](docs/api.md). Para Render y Supabase, consulta [docs/deployment.md](docs/deployment.md).
 

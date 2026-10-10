@@ -48,11 +48,22 @@ export async function handleIdentity(withTransaction, request, resource, invitat
         const invited = (await repo.list("invitations")).some((row) => row.email === email && row.status === "pending" && row.expires_at > new Date().toISOString());
         if (!invited) fail(403, "Registration requires a project invitation.");
       }
-      const user = await repo.insert("users", makeRecord("", { name, email, password_hash: passwordHash, can_import_legacy: first }));
+      const consentedAt = new Date().toISOString();
+      const user = await repo.insert("users", makeRecord("", {
+        name,
+        email,
+        password_hash: passwordHash,
+        can_import_legacy: first,
+        terms_accepted_at: consentedAt,
+        terms_version: "2026-10-09",
+        privacy_accepted_at: consentedAt,
+        privacy_version: "2026-10-09",
+      }));
       if (first)
         for (const project of await repo.list("projects"))
           await repo.insert("members", makeRecord(project.id, { user_id: user.id, name, email, role: "owner" }));
-      return { status: 201, data: { user: safeUser(user) }, sessionToken: await createSession(repo, user) };
+      const session = await createSession(repo, user);
+      return { status: 201, data: { user: safeUser(user) }, sessionToken: session.secret, sessionMaxAge: session.maxAge };
     });
   }
 
@@ -67,5 +78,8 @@ export async function handleIdentity(withTransaction, request, resource, invitat
     fail(401, "Invalid email or password.");
   }
   await options.throttle.clear(email);
-  return withTransaction(async (repo) => ({ data: { user: safeUser(user) }, sessionToken: await createSession(repo, user) }));
+  return withTransaction(async (repo) => {
+    const session = await createSession(repo, user, { persistent: input.remember_me === true });
+    return { data: { user: safeUser(user) }, sessionToken: session.secret, sessionMaxAge: session.maxAge };
+  });
 }

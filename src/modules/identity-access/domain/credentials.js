@@ -26,6 +26,9 @@ export function validateRegistration(input) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) fail(422, "Enter a valid email.");
   if (password.length < 12 || password.length > 128) fail(422, "Use a password with 12–128 characters.");
   if (typeof input.name !== "string" || !input.name.trim() || input.name.length > 100) fail(422, "Name is required.");
+  // Consent is part of the registration contract, not a client-only checkbox.
+  if (input.terms_accepted !== true || input.privacy_accepted !== true)
+    fail(422, "Accept the Terms of Service and Privacy Policy to create an account.");
   return { name: input.name.trim(), email, password };
 }
 
