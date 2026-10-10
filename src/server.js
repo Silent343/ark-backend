@@ -19,10 +19,12 @@ async function parseBody(request) {
   if (!/^application\/json(?:\s*;|$)/i.test(String(request.headers["content-type"] || "")))
     fail(415, "Content-Type must be application/json.");
   let size = 0;
+  // Vector plans contain many small CAD entities; other resources keep their existing upload limit.
+  const limit = /^\/api\/v1\/projects\/[^/]+\/blueprints(?:\/[^/?]+)?(?:\?|$)/.test(request.url || "") ? 32 * 1024 * 1024 : 4_300_000;
   const chunks = [];
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 4_300_000) fail(413, "Request is too large.");
+    if (size > limit) fail(413, "Request is too large.");
     chunks.push(chunk);
   }
   if (!size) return {};
