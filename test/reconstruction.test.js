@@ -13,5 +13,21 @@ test("reconstruction rejects malformed and unbounded GPU data", () => {
 test("v3 evidence is bounded and versioned", () => {
   const p=plan();p.reconstruction={version:3,pairedWalls:4,sourceEdges:8,alignedPlans:1,namedSpaces:1,fixtureCount:2,unresolvedSymbols:3,inferredLayers:["2"]};
   assert.doesNotThrow(()=>validateReconstruction(p));
-  for(const patch of [{version:4},{fixtureCount:-1},{inferredLayers:[null]}]) assert.throws(()=>validateReconstruction({...p,reconstruction:{...p.reconstruction,...patch}}));
+  for(const patch of [{version:5},{fixtureCount:-1},{inferredLayers:[null]}]) assert.throws(()=>validateReconstruction({...p,reconstruction:{...p.reconstruction,...patch}}));
+});
+
+test("v4 traces geometry to existing CAD evidence and explicit assumptions", () => {
+  const p = plan();
+  p.intent = "coordination";
+  p.levels[0].heightSource = "manual";
+  p.cad = {sourceName:"test.dwg", entities:[{id:"edge"}], regions:[{id:"view"}]};
+  p.elementEvidence = {slab:{sourceName:"test.dwg",regionId:"view",sourceIds:["edge"],method:"closed-contour",assumed:["thickness","material"]}};
+  p.reconstruction = {version:4,pairedWalls:0,sourceEdges:1,alignedPlans:1,namedSpaces:0,unmatchedOpenings:0,unregisteredRegions:["view"]};
+  assert.doesNotThrow(()=>validateReconstruction(p));
+  for (const patch of [{sourceIds:["invented"]},{regionId:"missing"},{sourceName:"other.dwg"},{method:"AI-verified"},{assumed:["anything"]}]) {
+    assert.throws(()=>validateReconstruction({...p,elementEvidence:{slab:{...p.elementEvidence.slab,...patch}}}));
+  }
+  assert.throws(()=>validateReconstruction({...p,elementEvidence:{missing:p.elementEvidence.slab}}));
+  assert.throws(()=>validateReconstruction({...p,levels:[{id:"ground",height:3,heightSource:"detected"}]}));
+  assert.throws(()=>validateReconstruction({...p,reconstruction:{...p.reconstruction,unregisteredRegions:["missing"]}}));
 });

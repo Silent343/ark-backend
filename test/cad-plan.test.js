@@ -16,3 +16,10 @@ test("CAD block evidence cannot bypass role and size validation",()=>{
   p.entities[0].role="unknown";assert.throws(()=>validateCadPlan(p));
   p.entities[0].role="furniture";p.entities[0].blockName="x".repeat(301);assert.throws(()=>validateCadPlan(p));
 });
+
+test("per-view heights and registration corrections are bounded",()=>{
+  const p=plan();
+  p.regions=[{id:"view",name:"Auditorio",minX:0,minY:0,maxX:10,maxY:10,elevation:-3,elevationSource:"manual",repeat:1,enabled:true,wallHeight:9.6,alignment:{x:1.5,y:-.5}}];
+  assert.doesNotThrow(()=>validateCadPlan(p));
+  for(const patch of [{wallHeight:0},{wallHeight:Infinity},{wallHeight:101},{alignment:{x:NaN,y:0}},{alignment:{x:0}},{elevationSource:"AI"}]) assert.throws(()=>validateCadPlan({...p,regions:[{...p.regions[0],...patch}]}));
+});
