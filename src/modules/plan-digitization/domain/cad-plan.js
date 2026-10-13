@@ -1,4 +1,5 @@
 import { fail } from "../../../errors.js";
+import {validateCadNeural} from "./neural-plan.js";
 
 /** Bound CAD payloads before persisting JSONB or handing entities to a renderer/exporter. */
 export function validateCadPlan(plan) {
@@ -35,6 +36,7 @@ export function validateCadPlan(plan) {
   }
   const regionIds = new Set();
   for (const region of plan.regions) {
+    if (region?.viewType !== undefined && !["plan", "section", "elevation", "schedule", "detail"].includes(region.viewType)) invalid();
     if (!region || !bounds(region) || typeof region.id !== "string" || regionIds.has(region.id) || typeof region.name !== "string" || region.name.length > 200 ||
       !number(region.elevation) || Math.abs(region.elevation) > 1000 || typeof region.enabled !== "boolean" || !Number.isInteger(region.repeat) || region.repeat < 1 || region.repeat > 20) invalid();
     regionIds.add(region.id);
@@ -43,4 +45,5 @@ export function validateCadPlan(plan) {
     if (region.alignment !== undefined && (!region.alignment || ![region.alignment.x, region.alignment.y].every(v => number(v) && Math.abs(v) <= 100000))) invalid();
     if (region.elevations !== undefined && (!Array.isArray(region.elevations) || region.elevations.length > 20 || !region.elevations.every(e => number(e) && Math.abs(e) <= 1000))) invalid();
   }
+  validateCadNeural(plan);
 }

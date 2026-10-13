@@ -10,6 +10,8 @@ import { requireUser, projectRole } from "./modules/identity-access/application/
 import { handleWorkspace } from "./composition/application/workspace-service.js";
 import { buildProjectReport } from "./modules/reporting/application/build-project-report.js";
 import { renderProjectReport } from "./modules/reporting/infrastructure/pdf-report.js";
+import { neuralStatus, detectNeuralPlan } from "./modules/plan-digitization/infrastructure/neural-detector.js";
+import { authorize } from "./modules/identity-access/application/authorization.js";
 
 const writeMethods = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const bodyMethods = new Set(["POST", "PATCH", "PUT"]);
@@ -150,6 +152,17 @@ export function createServer(pool) {
       });
       send(response, 200, await renderProjectReport(report), { ...common, "Content-Type": "application/pdf", "Content-Disposition": "attachment; filename=teluria-project-report.pdf" });
       return;
+    }
+    if (route.resource === "plan-detection" && !route.resourceId) {
+      await transaction(pool, async repo => {
+        const user = await requireUser(repo, request);
+        const role = await projectRole(repo, route.projectId, user.id);
+        if (!role || role === "client") fail(403, "Project design access required.");
+        authorize(role, "blueprints", request.method === "GET" ? "GET" : "PATCH");
+      });
+      if (request.method === "GET") {json(response,200,{data:neuralStatus()},common);return;}
+      if (request.method !== "POST") fail(405,"Method not allowed.");
+      json(response,200,{data:await detectNeuralPlan(request.body.image)},common);return;
     }
     const result = await handleWorkspace(pool, request, route);
     if (result.status === 204) return send(response, 204, null, common);

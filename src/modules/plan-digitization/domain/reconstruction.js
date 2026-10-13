@@ -1,7 +1,9 @@
 import { fail } from "../../../errors.js";
+import { validateDrawingCoordination } from "./drawing-coordination.js";
 
 /** Bound generated geometry before JSONB persistence and WebGL allocation. Legacy plans need none of these fields. */
 export function validateReconstruction(plan) {
+  validateDrawingCoordination(plan);
   const invalid = () => fail(422, "Invalid reconstructed geometry.");
   const finite = n => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 100000;
   const positive = n => finite(n) && n > 0;
@@ -43,7 +45,7 @@ export function validateReconstruction(plan) {
   }
   if (plan.reconstruction !== undefined) {
     const info = plan.reconstruction;
-    if (!info || !Number.isInteger(info.version) || info.version < 1 || info.version > 4) invalid();
+    if (!info || !Number.isInteger(info.version) || info.version < 1 || info.version > 6) invalid();
     for (const key of ["pairedWalls", "sourceEdges", "alignedPlans", "namedSpaces"]) if (!Number.isInteger(info[key]) || info[key] < 0 || info[key] > 1_000_000) invalid();
     for (const key of ["fixtureCount", "unresolvedSymbols", "unmatchedOpenings"]) if (info[key] !== undefined && (!Number.isInteger(info[key]) || info[key] < 0 || info[key] > 1_000_000)) invalid();
     if (info.inferredLayers !== undefined && (!Array.isArray(info.inferredLayers) || info.inferredLayers.length > 512 || info.inferredLayers.some(s => typeof s !== "string" || s.length > 300))) invalid();
@@ -58,7 +60,7 @@ export function validateReconstruction(plan) {
     const properties = new Set(["height", "thickness", "material", "sillHeight", "type", "elevation", "slope", "rise"]);
     for (const [id, item] of Object.entries(evidence)) {
       if (!elementIds.has(id) || !item || typeof item !== "object" || Array.isArray(item) || item.sourceName !== plan.cad.sourceName || !regionIds.has(item.regionId) ||
-        !["paired-faces", "cad-symbol", "closed-contour", "treads", "cad-text"].includes(item.method) ||
+        !["paired-faces", "cad-symbol", "closed-contour", "treads", "cad-text", "neural-mask"].includes(item.method) ||
         !Array.isArray(item.sourceIds) || item.sourceIds.length > 500 || !item.sourceIds.every(id => sourceIds.has(id)) ||
         !Array.isArray(item.assumed) || item.assumed.length > properties.size || !item.assumed.every(key => properties.has(key))) invalid();
     }

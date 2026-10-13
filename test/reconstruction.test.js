@@ -13,7 +13,7 @@ test("reconstruction rejects malformed and unbounded GPU data", () => {
 test("v3 evidence is bounded and versioned", () => {
   const p=plan();p.reconstruction={version:3,pairedWalls:4,sourceEdges:8,alignedPlans:1,namedSpaces:1,fixtureCount:2,unresolvedSymbols:3,inferredLayers:["2"]};
   assert.doesNotThrow(()=>validateReconstruction(p));
-  for(const patch of [{version:5},{fixtureCount:-1},{inferredLayers:[null]}]) assert.throws(()=>validateReconstruction({...p,reconstruction:{...p.reconstruction,...patch}}));
+  for(const patch of [{version:7},{fixtureCount:-1},{inferredLayers:[null]}]) assert.throws(()=>validateReconstruction({...p,reconstruction:{...p.reconstruction,...patch}}));
 });
 
 test("v4 traces geometry to existing CAD evidence and explicit assumptions", () => {

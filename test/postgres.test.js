@@ -82,6 +82,11 @@ test("PostgreSQL relations and API workflow", async () => {
   const cookie = remembered.cookie;
   const project = expectStatus(await api("/projects", { method: "POST", cookie, body: { name: "Project", location: "Lima", floors: 1, floor_height: 2.8, structure_type: "Concrete", soil_type: "Dense sand" } }), 201);
   const rootPath = `/projects/${project.id}`;
+  expectStatus(await api(`${rootPath}/plan-detection`),401);
+  const detector=expectStatus(await api(`${rootPath}/plan-detection`,{cookie}),200);
+  assert.equal(typeof detector.available,"boolean");
+  expectStatus(await api(`${rootPath}/plan-detection`,{cookie,method:"POST",body:{image:"not-an-image"}}),422);
+  expectStatus(await api("/projects/missing/plan-detection",{cookie}),404);
   const taskInput = { title: "Review", description: "", status: "todo", priority: "high", assignee: "Owner", due_date: "2026-12-01", discipline: "architecture" };
   const task = expectStatus(await api(`${rootPath}/tasks`, { method: "POST", cookie, body: taskInput }), 201);
   const updated = expectStatus(await api(`${rootPath}/tasks/${task.id}`, { method: "PATCH", cookie, version: task.updated_at, body: { status: "done" } }), 200);

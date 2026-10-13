@@ -1,4 +1,6 @@
 .data/
+.venv/
+__pycache__/
 coverage/
 node_modules/
 .env
