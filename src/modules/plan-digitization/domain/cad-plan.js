@@ -23,6 +23,8 @@ export function validateCadPlan(plan) {
       typeof entity.color !== "string" || !/^(#[\da-f]{6}|rgb\(\d{1,3},\d{1,3},\d{1,3}\))$/i.test(entity.color) ||
       (entity.group !== undefined && (typeof entity.group !== "string" || entity.group.length > 150))) invalid();
     ids.add(entity.id);
+    if (entity.blockName !== undefined && (typeof entity.blockName !== "string" || entity.blockName.length > 300)) invalid();
+    if (entity.role !== undefined && !roles.has(entity.role)) invalid();
     if (entity.kind === "path") {
       if (!Array.isArray(entity.points) || entity.points.length < 4 || entity.points.length > 512 || entity.points.length % 2 || !entity.points.every(number) || typeof entity.closed !== "boolean") invalid();
     } else if (entity.kind === "circle") {

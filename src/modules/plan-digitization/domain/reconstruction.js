@@ -39,7 +39,9 @@ export function validateReconstruction(plan) {
   }
   if (plan.reconstruction !== undefined) {
     const info = plan.reconstruction;
-    if (!info || !Number.isInteger(info.version) || info.version < 1 || info.version > 2) invalid();
+    if (!info || !Number.isInteger(info.version) || info.version < 1 || info.version > 3) invalid();
     for (const key of ["pairedWalls", "sourceEdges", "alignedPlans", "namedSpaces"]) if (!Number.isInteger(info[key]) || info[key] < 0 || info[key] > 1_000_000) invalid();
+    for (const key of ["fixtureCount", "unresolvedSymbols"]) if (info[key] !== undefined && (!Number.isInteger(info[key]) || info[key] < 0 || info[key] > 1_000_000)) invalid();
+    if (info.inferredLayers !== undefined && (!Array.isArray(info.inferredLayers) || info.inferredLayers.length > 512 || info.inferredLayers.some(s => typeof s !== "string" || s.length > 300))) invalid();
   }
 }

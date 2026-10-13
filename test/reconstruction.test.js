@@ -9,3 +9,9 @@ test("reconstruction rejects malformed and unbounded GPU data", () => {
     const p = plan(); mutate(p); assert.throws(() => validateReconstruction(p));
   }
 });
+
+test("v3 evidence is bounded and versioned", () => {
+  const p=plan();p.reconstruction={version:3,pairedWalls:4,sourceEdges:8,alignedPlans:1,namedSpaces:1,fixtureCount:2,unresolvedSymbols:3,inferredLayers:["2"]};
+  assert.doesNotThrow(()=>validateReconstruction(p));
+  for(const patch of [{version:4},{fixtureCount:-1},{inferredLayers:[null]}]) assert.throws(()=>validateReconstruction({...p,reconstruction:{...p.reconstruction,...patch}}));
+});

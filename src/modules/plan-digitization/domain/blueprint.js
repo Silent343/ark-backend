@@ -23,6 +23,10 @@ export function validateBlueprint(geometry, projectId) {
       if (!item || typeof item.id !== "string" || !geometry.levels.some(l=>l.id===item.levelId) ||
         ![item.x,item.y,item.width,item.depth,item.height].every(Number.isFinite) || item.width <= 0 || item.depth <= 0 || item.height <= 0)
         fail(422, "Invalid CAD fixtures.");
+      if (item.rotation !== undefined && (!Number.isFinite(item.rotation) || Math.abs(item.rotation) > 36000)) fail(422, "Invalid fixture rotation.");
+      if (item.kind !== undefined && !["chair","table","bed","sofa","toilet","sink","cabinet","equipment","plant","vehicle"].includes(item.kind)) fail(422, "Invalid fixture kind.");
+      if (item.evidence !== undefined && !["block","repeated-symbol"].includes(item.evidence)) fail(422, "Invalid fixture evidence.");
+      if (item.sourceIds !== undefined && (!Array.isArray(item.sourceIds) || item.sourceIds.length > 500 || item.sourceIds.some(s => typeof s !== "string" || s.length > 150))) fail(422, "Invalid fixture sources.");
     }
   }
 }

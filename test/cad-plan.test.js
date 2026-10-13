@@ -9,3 +9,10 @@ test("CAD trust boundary accepts vector geometry and rejects malformed edits",()
     const value=plan();mutate(value);assert.throws(()=>validateCadPlan(value));
   }
 });
+
+test("CAD block evidence cannot bypass role and size validation",()=>{
+  const p=plan();p.entities[0].blockName="cama doble";p.entities[0].role="furniture";
+  assert.doesNotThrow(()=>validateCadPlan(p));
+  p.entities[0].role="unknown";assert.throws(()=>validateCadPlan(p));
+  p.entities[0].role="furniture";p.entities[0].blockName="x".repeat(301);assert.throws(()=>validateCadPlan(p));
+});
