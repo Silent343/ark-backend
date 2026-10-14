@@ -162,7 +162,15 @@ export function createServer(pool) {
       });
       if (request.method === "GET") {json(response,200,{data:neuralStatus()},common);return;}
       if (request.method !== "POST") fail(405,"Method not allowed.");
-      json(response,200,{data:await detectNeuralPlan(request.body.image)},common);return;
+      const controller=new AbortController();
+      const closed=()=>{if(!response.writableEnded)controller.abort();};
+      response.once("close",closed);
+      try {
+        const data=await detectNeuralPlan(request.body?.image,request.body?.modelId,controller.signal);
+        if(!response.destroyed)json(response,200,{data},common);
+      } catch(error) {if(!response.destroyed)throw error;}
+      finally {response.off("close",closed);}
+      return;
     }
     const result = await handleWorkspace(pool, request, route);
     if (result.status === 204) return send(response, 204, null, common);
