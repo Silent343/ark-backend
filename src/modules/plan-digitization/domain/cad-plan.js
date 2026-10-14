@@ -26,6 +26,7 @@ export function validateCadPlan(plan) {
     ids.add(entity.id);
     if (entity.blockName !== undefined && (typeof entity.blockName !== "string" || entity.blockName.length > 300)) invalid();
     if (entity.role !== undefined && !roles.has(entity.role)) invalid();
+    if (entity.roleSource !== undefined && (!entity.role || !["geometry", "name", "manual"].includes(entity.roleSource))) invalid();
     if (entity.kind === "path") {
       if (!Array.isArray(entity.points) || entity.points.length < 4 || entity.points.length > 512 || entity.points.length % 2 || !entity.points.every(number) || typeof entity.closed !== "boolean") invalid();
     } else if (entity.kind === "circle") {
