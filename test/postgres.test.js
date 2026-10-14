@@ -82,6 +82,12 @@ test("PostgreSQL relations and API workflow", async () => {
   const cookie = remembered.cookie;
   const project = expectStatus(await api("/projects", { method: "POST", cookie, body: { name: "Project", location: "Lima", floors: 1, floor_height: 2.8, structure_type: "Concrete", soil_type: "Dense sand" } }), 201);
   const rootPath = `/projects/${project.id}`;
+  const familyGeometry = {projectId:project.id,width:600,height:600,levels:[{id:"ground",elevation:0}],rooms:[],walls:[],doors:[],windows:[],columns:[],fixtures:[{id:"chair",levelId:"ground",kind:"chair",x:60,y:60,width:30,depth:30,height:.9}],fixtureFamilies:{chair:{familyId:"chair-auditorium",finish:"dark",elevationM:.1}}};
+  const familyPlan=expectStatus(await api(`${rootPath}/blueprints`,{cookie,method:"POST",body:{geometry:familyGeometry}}),201);
+  const familyUpdate=expectStatus(await api(`${rootPath}/blueprints/${familyPlan.id}`,{cookie,method:"PATCH",version:familyPlan.updated_at,body:{geometry:{...familyGeometry,fixtureFamilies:{chair:{familyId:"chair-office",finish:"light",elevationM:0}}}}}),200);
+  const familyReload=expectStatus(await api(`${rootPath}/blueprints/${familyPlan.id}`,{cookie}),200);
+  assert.equal(familyReload.geometry.fixtureFamilies.chair.familyId,"chair-office");
+  expectStatus(await api(`${rootPath}/blueprints/${familyPlan.id}`,{cookie,method:"PATCH",version:familyUpdate.updated_at,body:{geometry:{...familyGeometry,fixtureFamilies:{chair:{familyId:"sink-wall",finish:"natural",elevationM:0}}}}}),422);
   expectStatus(await api(`${rootPath}/plan-detection`),401);
   const detector=expectStatus(await api(`${rootPath}/plan-detection`,{cookie}),200);
   assert.equal(typeof detector.available,"boolean");

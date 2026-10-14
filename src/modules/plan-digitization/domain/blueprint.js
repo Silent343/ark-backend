@@ -1,6 +1,7 @@
 import { fail } from "../../../errors.js";
 import { validateCadPlan } from "./cad-plan.js";
 import { validateReconstruction } from "./reconstruction.js";
+import { validateFixtureFamilies } from "./fixture-families.js";
 
 export function validateBlueprint(geometry, projectId) {
   if (!geometry || typeof geometry !== "object" || Array.isArray(geometry) || geometry.projectId !== projectId)
@@ -29,4 +30,5 @@ export function validateBlueprint(geometry, projectId) {
       if (item.sourceIds !== undefined && (!Array.isArray(item.sourceIds) || item.sourceIds.length > 500 || item.sourceIds.some(s => typeof s !== "string" || s.length > 150))) fail(422, "Invalid fixture sources.");
     }
   }
+  validateFixtureFamilies(geometry);
 }
