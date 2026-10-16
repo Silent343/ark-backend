@@ -22,5 +22,5 @@ export function configuredNeuralModels() {
 }
 export function neuralModelCapabilities() {
   const installed=configuredNeuralModels();
-  return Object.entries(NEURAL_MODELS).filter(([id])=>id!=="yytsi-resnet34-unet"||installed.some(m=>m.manifest.id===id)).map(([id,m])=>({id,label:m.label,classes:m.classes,available:installed.some(a=>a.manifest.id===id)}));
+  return Object.entries(NEURAL_MODELS).filter(([id])=>id!=="yytsi-resnet34-unet"||installed.some(m=>m.manifest.id===id)).map(([id,m])=>({id,label:m.label,candidate:!!m.candidate,classes:m.classes,available:installed.some(a=>a.manifest.id===id)}));
 }

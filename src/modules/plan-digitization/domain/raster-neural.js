@@ -1,5 +1,5 @@
 import {fail} from "../../../errors.js";
-import {validNeuralModel} from "./neural-contract.js";
+import {validNeuralModel,SPACE_MODEL_IDS} from "./neural-contract.js";
 import {validSymbols} from "./symbol-contract.js";
 export function validateRasterNeural(value) {
   const invalid=()=>fail(422,"Invalid image neural evidence.");
@@ -9,12 +9,12 @@ export function validateRasterNeural(value) {
     typeof p.overlay!=="string"||p.overlay.length>1_500_000||!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(p.overlay)||
     !Number.isFinite(p.elapsedMs)||p.elapsedMs<0||p.elapsedMs>150_000||
     !Array.isArray(p.counts)||p.counts.length!==p.model.classes.length||p.counts.some(n=>!Number.isInteger(n)||n<0||n>262144)||
-    !Array.isArray(p.walls)||p.walls.length>1000||!Array.isArray(p.instances)||p.instances.length>2000||!validSymbols(p.symbols,size))invalid();
+    !Array.isArray(p.walls)||p.walls.length>1000||!Array.isArray(p.instances)||p.instances.length>2000||!validSymbols(p.symbols,size)||p.focusModelId!==undefined&&p.focusModelId!=='cubicasa-multitask-v1')invalid();
   const point=v=>Array.isArray(v)&&v.length===2&&v.every(Number.isFinite)&&v[0]>=0&&v[1]>=0&&v[0]<=size.width&&v[1]<=size.height;
   if(p.sourceRegion!==undefined) {const r=p.sourceRegion;if(!r||![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.x<0||r.y<0||r.width<=0||r.height<=0||r.x+r.width>size.width||r.y+r.height>size.height)invalid();}
   const ids=new Set();
   if(p.spaces!==undefined) {
-    if(p.model.id!=="cubicasa-multitask-v1"||!Array.isArray(p.spaces)||p.spaces.length>100)invalid();
+    if(!SPACE_MODEL_IDS.includes(p.model.id)||!Array.isArray(p.spaces)||p.spaces.length>100)invalid();
     const ring=v=>Array.isArray(v)&&v.length>=3&&v.length<=256&&v.every(point)&&Math.abs(v.reduce((sum,a,j)=>{const b=v[(j+1)%v.length];return sum+a[0]*b[1]-b[0]*a[1];},0))>0;
     const spaceIds=new Set();
     for(const s of p.spaces) {

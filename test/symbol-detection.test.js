@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {decodeSymbols,suppressSymbols,symbolTiles} from '../src/modules/plan-digitization/infrastructure/symbol-inference.js';
-import {SYMBOL_CLASSES,PILOT_SYMBOL_CLASSES,validSymbols,validSymbolModel} from '../src/modules/plan-digitization/domain/symbol-contract.js';
+import {SYMBOL_CLASSES,PILOT_SYMBOL_CLASSES,VEHICLE_SYMBOL_CLASSES,validSymbols,validSymbolModel} from '../src/modules/plan-digitization/domain/symbol-contract.js';
 const model={id:'floorcad-symbols-v1',revision:'02995225d7aed598bc7e0214f5b7f3fe7fe95657',checkpointSha256:'be1a5a404c5ad1c454ba7531e2c16548a6330945319cbf989751ff73578b494c',artifactSha256:'a'.repeat(64),usage:'experimental-research',size:640,classes:SYMBOL_CLASSES};
+
+test('vehicle head uses seven explicit classes; legacy six-class weights cannot claim cars',()=>{
+ const pilot={...model,id:'ark-objects-pilot-v2',revision:'d'.repeat(40),classes:VEHICLE_SYMBOL_CLASSES,training:{datasetSha256:'e'.repeat(64),images:278,epochs:68,annotationQuality:'agent-provisional',independentValidation:false}};
+ assert(validSymbolModel(pilot));assert(!validSymbolModel({...pilot,id:'ark-objects-pilot-v1'}));
+ const data=new Float32Array(11*8400),N=8400;data[0]=100;data[N]=220;data[2*N]=80;data[3*N]=200;data[(4+6)*N]=.9;
+ const items=suppressSymbols(decodeSymbols({data,dims:[1,11,8400]},{x:100,y:200,width:640,height:640},{x:0,y:0,width:640,height:640},{width:1000,height:1500},pilot.classes));
+ assert.equal(items[0].kind,'vehicle');assert.deepEqual(items[0].box,[160,320,240,520]);
+ assert(validSymbols({model:pilot,threshold:.35,passes:1,elapsedMs:20,items},{width:1000,height:1500}));
+});
 test('symbol decoder maps tiles to original pixels and does not relabel unsupported classes',()=>{
   const data=new Float32Array(39*8400),N=8400;
   data[0]=320;data[N]=320;data[2*N]=100;data[3*N]=200;data[(4+6)*N]=.8;

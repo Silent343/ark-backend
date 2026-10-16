@@ -9,18 +9,20 @@ import os
 from pathlib import Path
 import sys
 
-CLASSES = ['chair', 'table', 'sofa', 'bed', 'plant', 'stair']
+LEGACY_CLASSES = ['chair', 'table', 'sofa', 'bed', 'plant', 'stair']
+CLASSES = LEGACY_CLASSES + ['vehicle']
 
 def validate_package(manifest_file, pilot):
     file = Path(manifest_file).resolve()
     manifest = json.loads(file.read_text(encoding='utf-8'))
-    if manifest.get('schemaVersion') != 'ark-object-training-1' or manifest.get('classes') != CLASSES:
+    if manifest.get('schemaVersion') != 'ark-object-training-1' or manifest.get('classes') not in [LEGACY_CLASSES, CLASSES]:
         raise ValueError('Unexpected object training contract')
     if manifest.get('independentValidation') is not False or not pilot:
         raise ValueError('These labels are provisional. Explicit --pilot is required; independent validation remains pending.')
     if not manifest.get('records') or not manifest.get('annotator'):
         raise ValueError('Missing annotated training records')
-    counts = dict.fromkeys(CLASSES, 0)
+    classes=manifest['classes']
+    counts = dict.fromkeys(classes, 0)
     held_out = set(manifest.get('heldOutBuildingGroups', []))
     for record in manifest['records']:
         if record.get('split') != 'train' or not record.get('sourceIds'):
@@ -41,16 +43,16 @@ def validate_package(manifest_file, pilot):
             if len(values) != 5 or not all(0 <= n <= 1 for n in values[1:]) or min(values[3:]) <= 0:
                 raise ValueError('Invalid normalized object box')
             category = int(values[0])
-            if category != values[0] or not 0 <= category < len(CLASSES):
+            if category != values[0] or not 0 <= category < len(classes):
                 raise ValueError('Unknown training class')
             target = record['objects'][index]
             b = target['box']
             expected = [(b[0]+b[2])/1280, (b[1]+b[3])/1280, (b[2]-b[0])/640, (b[3]-b[1])/640]
-            if target['kind'] != CLASSES[category] or any(abs(a-b)>1e-7 for a,b in zip(values[1:],expected)):
+            if target['kind'] != classes[category] or any(abs(a-b)>1e-7 for a,b in zip(values[1:],expected)):
                 raise ValueError('Object labels changed after annotation packaging')
-            counts[CLASSES[category]] += 1
+            counts[classes[category]] += 1
     if not all(counts.values()):
-        raise ValueError('All six classes require annotated positive examples')
+        raise ValueError('Every declared class requires annotated positive examples')
     return file, manifest, counts
 
 def main():
@@ -66,6 +68,7 @@ def main():
     parser.add_argument('--lr', type=float, default=.001)
     args = parser.parse_args()
     file, manifest, counts = validate_package(args.manifest, args.pilot)
+    classes = manifest['classes']
     print(json.dumps({'stage': 'preflight', 'images': len(manifest['records']), 'objects': counts,
                       'independentValidation': False}), flush=True)
     if args.validate_only:
@@ -97,7 +100,7 @@ def main():
             raise ValueError('Initial pilot must be a private local training run')
         previous = json.loads((initial / 'manifest.json').read_text())
         checkpoint = initial / 'weights/best.pt'
-        if previous.get('id') != 'ark-objects-pilot-v1' or previous.get('classes') != CLASSES or hashlib.sha256(checkpoint.read_bytes()).hexdigest() != previous['checkpointSha256']:
+        if previous.get('id') not in ['ark-objects-pilot-v1','ark-objects-pilot-v2'] or previous.get('classes') not in [LEGACY_CLASSES, classes] or hashlib.sha256(checkpoint.read_bytes()).hexdigest() != previous['checkpointSha256']:
             raise ValueError('Pilot checkpoint provenance mismatch')
         allowed = source_export.ALLOWED
         if not set(torch.serialization.get_unsafe_globals_in_checkpoint(checkpoint)) <= set(allowed):
@@ -106,21 +109,21 @@ def main():
         with torch.serialization.safe_globals(safe):
             loaded = torch.load(checkpoint, map_location='cpu', weights_only=True)
         source_model = (loaded.get('ema') or loaded['model']).float().eval()
-        if [source_model.names[i] for i in range(len(source_model.names))] != CLASSES:
+        if [source_model.names[i] for i in range(len(source_model.names))] != previous['classes']:
             raise ValueError('Unexpected pilot checkpoint class order')
         SOURCE_HASH = previous['checkpointSha256']
         previous_epochs = previous['training']['epochs']
 
     class PilotTrainer(DetectionTrainer):
         def get_model(self, cfg=None, weights=None, verbose=True):
-            model = DetectionModel(copy.deepcopy(source_model.yaml), nc=len(CLASSES), verbose=False)
+            model = DetectionModel(copy.deepcopy(source_model.yaml), nc=len(classes), verbose=False)
             model.load(source_model, verbose=False)
             original = source_model.model[-1]
             new = model.model[-1]
             source_ids = {name: index for index, name in source_model.names.items()}
             with torch.no_grad():
                 for old_branch, new_branch in zip(original.cv3, new.cv3):
-                    for index, name in enumerate(CLASSES):
+                    for index, name in enumerate(classes):
                         if name in source_ids:
                             new_branch[-1].weight[index].copy_(old_branch[-1].weight[source_ids[name]])
                             new_branch[-1].bias[index].copy_(old_branch[-1].bias[source_ids[name]])
@@ -144,15 +147,15 @@ def main():
     with torch.no_grad():
         sample = torch.zeros(1, 3, 640, 640)
         shape = list(trained(sample).shape)
-        if shape != [1, 10, 8400]:
+        if shape != [1, 4+len(classes), 8400]:
             raise ValueError(f'Unexpected trained output shape: {shape}')
         torch.onnx.export(trained, sample, artifact, input_names=['images'], output_names=['detections'],
                           opset_version=17, dynamo=False)
     best = output / 'weights/best.pt'
     dataset_hash = hashlib.sha256(file.read_bytes()).hexdigest()
-    trained_manifest = dict(id='ark-objects-pilot-v1', revision=dataset_hash[:40],
+    trained_manifest = dict(id='ark-objects-pilot-v2' if 'vehicle' in classes else 'ark-objects-pilot-v1', revision=dataset_hash[:40],
         checkpointSha256=hashlib.sha256(best.read_bytes()).hexdigest(),
-        artifactSha256=hashlib.sha256(artifact.read_bytes()).hexdigest(), classes=CLASSES,
+        artifactSha256=hashlib.sha256(artifact.read_bytes()).hexdigest(), classes=classes,
         size=640, usage='experimental-research', weightsLicense='AGPL-3.0', datasetLicense='private-user-data-and-NC-pretraining',
         label='Ark · mobiliario entrenado (piloto)',
         training=dict(datasetSha256=dataset_hash, parentCheckpointSha256=SOURCE_HASH, epochs=args.epochs+previous_epochs,

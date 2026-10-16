@@ -3,6 +3,7 @@ import { validateCadPlan } from "./cad-plan.js";
 import { validateReconstruction } from "./reconstruction.js";
 import { validateFixtureFamilies } from "./fixture-families.js";
 import { validateRasterNeural } from "./raster-neural.js";
+import { validSourceCalibration } from "./source-calibration.js";
 
 export function validateBlueprint(geometry, projectId) {
   if (!geometry || typeof geometry !== "object" || Array.isArray(geometry) || geometry.projectId !== projectId)
@@ -20,6 +21,7 @@ export function validateBlueprint(geometry, projectId) {
   if (geometry.cad !== undefined) validateCadPlan(geometry.cad);
   validateReconstruction(geometry);
   for (const sheet of geometry.sheets ?? []) {
+    if(sheet.sourceCalibration!==undefined&&!validSourceCalibration(sheet.sourceCalibration,sheet.metersPerUnit))fail(422,'Invalid source calibration.');
     if(sheet.neural !== undefined) validateRasterNeural(sheet.neural);
     if(sheet.analysisImage!==undefined && (typeof sheet.analysisImage!=='string'||sheet.analysisImage.length>4_200_000||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(sheet.analysisImage)))fail(422,'Invalid analysis image.');
   }

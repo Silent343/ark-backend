@@ -4,7 +4,8 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {combinedBounds,entityBounds} from './cad_object_geometry.mjs';
-export const OBJECT_CLASSES=['chair','table','sofa','bed','plant','stair'];
+import {completeObjectCrop} from './complete_object_crop.mjs';
+export const OBJECT_CLASSES=['chair','table','sofa','bed','plant','stair','vehicle'];
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const inside=(a,b,t=0)=>a[0]<=b[2]+t&&a[2]>=b[0]-t&&a[1]<=b[3]+t&&a[3]>=b[1]-t;
 const area=b=>(b[2]-b[0])*(b[3]-b[1]);
@@ -28,19 +29,20 @@ export function rotateBox(b,size,turn) {let [x1,y1,x2,y2]=b;for(let n=0;n<turn;n
 export async function prepareObjectPilot(configFile,outDirectory) {
  const configBytes=await fs.readFile(configFile),config=JSON.parse(configBytes),out=path.resolve(outDirectory),privateRoot=path.resolve('.data');
  let parentBytes;
- if(config.extends){const parent=path.resolve(path.dirname(configFile),config.extends);if(!parent.startsWith(privateRoot+path.sep))throw new Error('Replay labels must remain private');parentBytes=await fs.readFile(parent);const replay=JSON.parse(parentBytes);if(replay.extends||replay.classes?.join(',')!==OBJECT_CLASSES.join(','))throw new Error('Invalid replay label package');config.images=[...(replay.images??[]),...(config.images??[])];config.cadPrototypes=[...(replay.cadPrototypes??[]),...(config.cadPrototypes??[])];}
+ if(config.extends){const parent=path.resolve(path.dirname(configFile),config.extends);if(!parent.startsWith(privateRoot+path.sep))throw new Error('Replay labels must remain private');parentBytes=await fs.readFile(parent);const replay=JSON.parse(parentBytes);if(replay.extends||replay.classes?.join(',')!==config.classes?.slice(0,replay.classes.length).join(','))throw new Error('Invalid replay label package');config.images=[...(replay.images??[]),...(config.images??[])];config.cadPrototypes=[...(replay.cadPrototypes??[]),...(config.cadPrototypes??[])];}
  const reserved=new Set(config.heldOutBuildingGroups??[]);
  if([...config.images,...(config.cadPrototypes??[])].some(s=>!s.buildingGroup||reserved.has(s.buildingGroup)))throw new Error('Held-out building leaked into training sources');
  if(!out.startsWith(privateRoot+path.sep))throw new Error('Private training output must be under .data');
- if(config.schemaVersion!=='ark-object-labels-1'||config.classes?.join(',')!==OBJECT_CLASSES.join(',')||!config.annotator)throw new Error('Invalid object label package');
+ const classes=config.classes;
+ if(config.schemaVersion!=='ark-object-labels-1'||![OBJECT_CLASSES.join(','),OBJECT_CLASSES.slice(0,6).join(',')].includes(classes?.join(','))||!config.annotator)throw new Error('Invalid object label package');
  try{await fs.access(out);throw new Error('Existing training packages cannot be overwritten');}catch(e){if(e.code!=='ENOENT')throw e;}
  for(const d of ['images','labels','review'])await fs.mkdir(path.join(out,d),{recursive:true});
- const records=[],sources=[],counts=Object.fromEntries(OBJECT_CLASSES.map(c=>[c,0]));
+ const records=[],sources=[],counts=Object.fromEntries(classes.map(c=>[c,0]));
  const save=async(bytes,items,metadata)=>{
    if(!items.length&&!metadata.negative)return;
    const stem=`object-${String(records.length+1).padStart(4,'0')}`,size=640;
    const encoded=await sharp(bytes).resize(size,size,{fit:'fill'}).png().toBuffer();
-   const labels=items.map(i=>`${OBJECT_CLASSES.indexOf(i.kind)} ${(i.box[0]+i.box[2])/2/size} ${(i.box[1]+i.box[3])/2/size} ${(i.box[2]-i.box[0])/size} ${(i.box[3]-i.box[1])/size}`).join('\n')+'\n';
+   const labels=items.map(i=>`${classes.indexOf(i.kind)} ${(i.box[0]+i.box[2])/2/size} ${(i.box[1]+i.box[3])/2/size} ${(i.box[2]-i.box[0])/size} ${(i.box[3]-i.box[1])/size}`).join('\n')+'\n';
    await fs.writeFile(path.join(out,'images',stem+'.png'),encoded);await fs.writeFile(path.join(out,'labels',stem+'.txt'),labels);
    records.push({id:stem,image:`images/${stem}.png`,labels:`labels/${stem}.txt`,imageSha256:hash(encoded),...metadata,objects:items.map(i=>({kind:i.kind,box:i.box}))});
    for(const i of items)counts[i.kind]++;
@@ -50,24 +52,20 @@ export async function prepareObjectPilot(configFile,outDirectory) {
    const bytes=await fs.readFile(source.path),m=await sharp(bytes).metadata();
    if(source.sourceHash&&hash(bytes)!==source.sourceHash)throw new Error('Source image changed');
    const seen=new Set();
-   for(const a of source.annotations){if(!OBJECT_CLASSES.includes(a.kind)||!Array.isArray(a.box)||a.box.length!==4||!a.box.every(Number.isFinite)||a.box[0]<0||a.box[1]<0||a.box[2]>m.width||a.box[3]>m.height||area(a.box)<=0)throw new Error('Invalid object box');seen.add(a.kind);}
+   for(const a of source.annotations){if(!classes.includes(a.kind)||!Array.isArray(a.box)||a.box.length!==4||!a.box.every(Number.isFinite)||a.box[0]<0||a.box[1]<0||a.box[2]>m.width||a.box[3]>m.height||area(a.box)<=0)throw new Error('Invalid object box');seen.add(a.kind);}
    sources.push({id:source.id,hash:hash(bytes),name:path.basename(source.path),buildingGroup:source.buildingGroup,objects:source.annotations.length,annotationQuality:source.annotationQuality});
-   const colors=['#a35810','#1859a9','#713ea0','#a32e59','#27814d','#b04024'];
+   const colors=['#a35810','#1859a9','#713ea0','#a32e59','#27814d','#b04024','#3c5185'];
    const overlay=`<svg xmlns="http://www.w3.org/2000/svg" width="${m.width}" height="${m.height}">${source.annotations.map((a,i)=>`<rect x="${a.box[0]}" y="${a.box[1]}" width="${a.box[2]-a.box[0]}" height="${a.box[3]-a.box[1]}" stroke="${colors[OBJECT_CLASSES.indexOf(a.kind)]}" stroke-width="2" fill="none"/><text x="${a.box[0]}" y="${Math.max(14,a.box[1]-3)}" font-size="12" fill="${colors[OBJECT_CLASSES.indexOf(a.kind)]}">${i+1} ${a.kind}</text>`).join('')}</svg>`;
    await sharp(bytes).composite([{input:Buffer.from(overlay)}]).png().toFile(path.join(out,'review',source.id+'-labels.png'));
    const crops=[];
-   for(const edge of [384,640])for(const center of source.annotations.filter((a,n)=>edge===384||n%3===0)){
-     const left=Math.max(0,Math.min(m.width-edge,Math.round((center.box[0]+center.box[2]-edge)/2))),top=Math.max(0,Math.min(m.height-edge,Math.round((center.box[1]+center.box[3]-edge)/2)));
-     const key=[left,top,edge].join(',');if(crops.some(c=>c.key===key))continue;crops.push({key,left,top,edge});
+   for(const edge of [256,640])for(const center of source.annotations.filter((a,n)=>edge===256||n%3===0)){
+     const region=completeObjectCrop(source.annotations.map(a=>a.box),m.width,m.height,(center.box[0]+center.box[2])/2,(center.box[1]+center.box[3])/2,Math.min(edge,m.width,m.height));
+     const key=region.join(',');if(crops.some(c=>c.key===key))continue;crops.push({key,region});
    }
    for(const crop of crops){
-     const region=[crop.left,crop.top,crop.left+crop.edge,crop.top+crop.edge],k=640/crop.edge;
-     const clipped=source.annotations.filter(a=>inside(a.box,region)).flatMap(a=>{
-       const b=[Math.max(region[0],a.box[0]),Math.max(region[1],a.box[1]),Math.min(region[2],a.box[2]),Math.min(region[3],a.box[3])];
-       if(area(b)/area(a.box)<.15||b[2]-b[0]<3||b[3]-b[1]<3)return [];
-       return [{kind:a.kind,box:[(b[0]-crop.left)*k,(b[1]-crop.top)*k,(b[2]-crop.left)*k,(b[3]-crop.top)*k]}];
-     });
-     const raster=await sharp(bytes).extract({left:crop.left,top:crop.top,width:crop.edge,height:crop.edge}).resize(640,640).png().toBuffer();
+     const region=crop.region,w=region[2]-region[0],h=region[3]-region[1],k=Math.min(640/w,640/h),rw=Math.round(w*k),rh=Math.round(h*k),padX=Math.floor((640-rw)/2),padY=Math.floor((640-rh)/2);
+     const clipped=source.annotations.filter(a=>a.box[0]>=region[0]&&a.box[1]>=region[1]&&a.box[2]<=region[2]&&a.box[3]<=region[3]).map(a=>({kind:a.kind,box:[(a.box[0]-region[0])*rw/w+padX,(a.box[1]-region[1])*rh/h+padY,(a.box[2]-region[0])*rw/w+padX,(a.box[3]-region[1])*rh/h+padY]}));
+     const raster=await sharp(bytes).extract({left:region[0],top:region[1],width:w,height:h}).resize(rw,rh).extend({left:padX,top:padY,right:640-rw-padX,bottom:640-rh-padY,background:'#fff'}).png().toBuffer();
      for(const turn of [0,1])await save(await sharp(raster).rotate(turn*90).png().toBuffer(),clipped.map(i=>({...i,box:rotateBox(i.box,640,turn)})),{sourceIds:[source.id],buildingGroups:[source.buildingGroup],crop:region,rotation:turn*90,syntheticComposite:false,split:'train',labelQuality:'agent-annotated-pilot'});
    }
    for(const b of source.negativeRegions??[]){
@@ -83,8 +81,23 @@ export async function prepareObjectPilot(configFile,outDirectory) {
    if(!shapes.length)throw new Error('Empty prototype');
    const rendered=vectorSvg(shapes),raster=await sharp(rendered.svg).png().toBuffer(),meta=await sharp(raster).metadata();
    await fs.writeFile(path.join(out,'review',`${prototypes.length+1}-${p.kind}-cad.png`),raster);
-   prototypes.push({kind:p.kind,raster,width:meta.width,height:meta.height,sourceId:v.sourceHash,group:p.group,buildingGroup:p.buildingGroup});
+   prototypes.push({kind:p.kind,raster,shapes,width:meta.width,height:meta.height,sourceId:v.sourceHash,group:p.group,buildingGroup:p.buildingGroup});
    sources.push({id:v.sourceHash,name:p.sourceName,buildingGroup:p.buildingGroup,group:p.group,selection:p.selection,selectedBounds:rendered.bounds,selectedEntityIds:shapes.map(s=>s.id),annotationQuality:p.review});
+ }
+ // Large, complete symbols are rendered from vectors (not enlarged thick PNG
+ // strokes). This covers scale changes without using the reserved test building.
+ const prototypeSizes=config.prototypeSizes??[280,520];
+ if(!Array.isArray(prototypeSizes)||!prototypeSizes.length||prototypeSizes.length>6||prototypeSizes.some(n=>!Number.isInteger(n)||n<24||n>520))throw new Error('Invalid prototype scales');
+ for(const p of prototypes)for(const edge of prototypeSizes){
+   const vector=vectorSvg(p.shapes,edge),raster=await sharp(vector.svg).png().toBuffer(),m=await sharp(raster).metadata(),left=Math.floor((640-m.width)/2),top=Math.floor((640-m.height)/2);
+   const canvas=await sharp({create:{width:640,height:640,channels:3,background:'#fff'}}).composite([{input:raster,left,top}]).png().toBuffer();
+   for(const turn of [0,1])await save(await sharp(canvas).rotate(turn*90).png().toBuffer(),[{kind:p.kind,box:rotateBox([left+6,top+6,left+m.width-6,top+m.height-6],640,turn)}],{sourceIds:[p.sourceId],buildingGroups:[p.buildingGroup],syntheticComposite:true,split:'train',labelQuality:'complete-reviewed-CAD-prototype-multiscale'});
+ }
+ if(config.fragmentNegatives)for(const p of prototypes.filter(p=>p.kind==='chair')){
+   const vector=vectorSvg(p.shapes,520),raster=await sharp(vector.svg).png().toBuffer(),m=await sharp(raster).metadata();
+   const width=Math.max(8,Math.round(m.width*.16)),fragment=await sharp(raster).extract({left:m.width-width,top:0,width,height:m.height}).png().toBuffer();
+   const image=await sharp({create:{width:640,height:640,channels:3,background:'#fff'}}).composite([{input:fragment,left:300,top:Math.floor((640-m.height)/2)}]).png().toBuffer();
+   for(const turn of [0,1,2,3])await save(await sharp(image).rotate(turn*90).png().toBuffer(),[],{sourceIds:[p.sourceId],buildingGroups:[p.buildingGroup],split:'train',negative:true,syntheticComposite:true,labelQuality:'reviewed-prototype-fragment-not-a-complete-object'});
  }
  // Compositions use real CAD strokes and retain their origin. They are augmentations, not new buildings.
  for(let n=0;n<12;n++){
@@ -97,14 +110,14 @@ export async function prepareObjectPilot(configFile,outDirectory) {
    const image=await sharp({create:{width:640,height:640,channels:3,background:'#fff'}}).composite(overlays).png().toBuffer();
    await save(image,items,{sourceIds:[...sourceIds],buildingGroups:[...buildingGroups],syntheticComposite:true,split:'train',labelQuality:'agent-reviewed-CAD-prototype-derived'});
  }
- const manifest={schemaVersion:'ark-object-training-1',createdAt:new Date().toISOString(),classes:OBJECT_CLASSES,
+ const manifest={schemaVersion:'ark-object-training-1',createdAt:new Date().toISOString(),classes,
    annotator:config.annotator,independentReviewer:config.independentReviewer,independentValidation:false,
    annotationPolicy:'pilot-agent-labels; excluded from independent architectural benchmark',configurationSha256:hash(configBytes),...(parentBytes?{replayConfigurationSha256:hash(parentBytes)}:{}),heldOutBuildingGroups:[...reserved],sources,records,
    summary:{images:records.length,originalObjects:config.images.reduce((n,s)=>n+s.annotations.length,0),cadPrototypes:prototypes.length,augmentedObjects:counts,uniqueBuildingGroups:[...new Set(sources.map(s=>s.buildingGroup))]}};
  const manifestBytes=JSON.stringify(manifest,null,2);await fs.writeFile(path.join(out,'manifest.json'),manifestBytes);
  const list=records.map(r=>path.join(out,r.image).replaceAll('\\','/')).join('\n')+'\n';await fs.writeFile(path.join(out,'train.txt'),list);
  // Ultralytics requires a validation path. This diagnostic is explicitly training-fit only.
- await fs.writeFile(path.join(out,'data.yaml'),`path: ${JSON.stringify(out.replaceAll('\\','/'))}\ntrain: train.txt\nval: train.txt\nnc: 6\nnames: ${JSON.stringify(OBJECT_CLASSES)}\n`);
+ await fs.writeFile(path.join(out,'data.yaml'),`path: ${JSON.stringify(out.replaceAll('\\','/'))}\ntrain: train.txt\nval: train.txt\nnc: ${classes.length}\nnames: ${JSON.stringify(classes)}\n`);
  console.log(JSON.stringify(manifest.summary,null,2));return manifest;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===import.meta.filename){const [config,out]=process.argv.slice(2);if(!config||!out)throw new Error('Usage: node training/prepare_object_pilot.mjs labels.json .data/training/unique-package');await prepareObjectPilot(config,out);}

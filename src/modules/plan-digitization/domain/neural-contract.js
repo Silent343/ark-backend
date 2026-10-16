@@ -4,8 +4,13 @@ export const NEURAL_MODELS = {
   "openbim-m2-unet": {label:"OpenBIM · arquitectura",classes:CORE_NEURAL_CLASSES,directory:"openbim-m2-v1"},
   "yytsi-resnet34-unet": {label:"U-Net · arquitectura",classes:CORE_NEURAL_CLASSES},
   "cubicasa-multitask-v1": {label:"CubiCasa · arquitectura y equipamiento",classes:EXPANDED_NEURAL_CLASSES,directory:"cubicasa-multitask-v1"},
+  "ark-architecture-pilot-v1": {label:"Ark · aberturas (piloto)",classes:EXPANDED_NEURAL_CLASSES,directory:"ark-architecture-pilot-v1",candidate:true},
+  "ark-architecture-pilot-v2": {label:"Ark · suelos y aberturas (candidato)",classes:EXPANDED_NEURAL_CLASSES,directory:"ark-architecture-pilot-v2",candidate:true},
 };
+export const SPACE_MODEL_IDS=['cubicasa-multitask-v1','ark-architecture-pilot-v1','ark-architecture-pilot-v2'];
 export function validNeuralModel(model) {
+  if(['ark-architecture-pilot-v1','ark-architecture-pilot-v2'].includes(model?.id)&&(!model.training||model.training.annotationQuality!=='agent-provisional'||model.training.independentValidation!==false||model.training.parentCheckpointSha256!=='dd20b4e1bf1d670f2125107b079df06958b1ccd36e49a464ab739aeb00b8e7a2'||!/^[a-f0-9]{64}$/.test(model.training.datasetSha256)||!Number.isInteger(model.training.images)||model.training.images<1||model.training.images>10000||!Number.isInteger(model.training.epochs)||model.training.epochs<1||model.training.epochs>1000))return false;
+  if(model?.id==='ark-architecture-pilot-v2'&&(!/^[a-f0-9]{64}$/.test(model.training.openingCheckpointSha256)||!/^[a-f0-9]{64}$/.test(model.training.openingArtifactSha256)||!Number.isInteger(model.training.openingEpochs)||model.training.openingEpochs<1||model.training.openingEpochs>1000))return false;
   return !!model && Object.hasOwn(NEURAL_MODELS,model.id) && typeof model.revision==="string" && /^(?:[a-f0-9]{40}|v1\.0\.0)$/.test(model.revision) &&
     typeof model.checkpointSha256==="string" && /^[a-f0-9]{64}$/.test(model.checkpointSha256) && typeof model.artifactSha256==="string" && /^[a-f0-9]{64}$/.test(model.artifactSha256) &&
     model.usage==="experimental-research" && Array.isArray(model.classes) && model.classes.join(",")===NEURAL_MODELS[model.id].classes.join(",");

@@ -55,7 +55,8 @@ export function symbolTiles(size,focus,minimumEdge=640) {
   return regions;
 }
 export async function inferSymbols(bytes,sourceSize,session,manifest,focus) {
-  const started=performance.now(),regions=symbolTiles(sourceSize,manifest.id==='ark-objects-pilot-v1'?focus:undefined,manifest.id==='ark-objects-pilot-v1'?384:640),items=[];
+  const pilot=manifest.id.startsWith('ark-objects-pilot-');
+  const started=performance.now(),regions=symbolTiles(sourceSize,pilot?focus:undefined,pilot?384:640),items=[];
   for(const region of regions) {
     const scale=Math.min(SIZE/region.width,SIZE/region.height),w=Math.round(region.width*scale),h=Math.round(region.height*scale);
     const left=Math.floor((SIZE-w)/2),top=Math.floor((SIZE-h)/2);

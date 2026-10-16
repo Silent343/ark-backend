@@ -91,6 +91,8 @@ test("PostgreSQL relations and API workflow", async () => {
   expectStatus(await api(`${rootPath}/plan-detection`),401);
   const detector=expectStatus(await api(`${rootPath}/plan-detection`,{cookie}),200);
   assert.equal(typeof detector.available,"boolean");
+  assert(Array.isArray(detector.symbols.models));
+  expectStatus(await api(`${rootPath}/plan-detection`,{cookie,method:"POST",body:{image:"not-an-image",symbols:true,symbolModelId:"../../arbitrary-model"}}),422);
   expectStatus(await api(`${rootPath}/plan-detection`,{cookie,method:"POST",body:{image:"not-an-image"}}),422);
   expectStatus(await api("/projects/missing/plan-detection",{cookie}),404);
   const taskInput = { title: "Review", description: "", status: "todo", priority: "high", assignee: "Owner", due_date: "2026-12-01", discipline: "architecture" };

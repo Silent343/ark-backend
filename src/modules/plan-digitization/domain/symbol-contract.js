@@ -1,11 +1,12 @@
 export const SYMBOL_CLASSES = 'bath bath_tub bay_window bed bedside_cupboard blind_window chair class_31 class_32 class_34 class_35 double_door elevator escalator gas_stove half_height_cabinet high_cabinet opening_symbol parking railing refrigerator single_door sink sliding_door sofa squat_toilet stair table toilet tv_cabinet urinal wall wardrobe washing_machine window'.split(' ');
-export const SYMBOL_KINDS = ['chair','table','sofa','bed','plant','stair'];
+export const SYMBOL_KINDS = ['chair','table','sofa','bed','plant','stair','vehicle'];
 export const PILOT_SYMBOL_CLASSES = ['chair','table','sofa','bed','plant','stair'];
+export const VEHICLE_SYMBOL_CLASSES = [...PILOT_SYMBOL_CLASSES,'vehicle'];
 export const SYMBOL_MODEL_ID = 'floorcad-symbols-v1';
 export function validSymbolModel(m) {
-  if(m?.id==='ark-objects-pilot-v1')return m.usage==='experimental-research'&&m.size===640&&
+  if(['ark-objects-pilot-v1','ark-objects-pilot-v2'].includes(m?.id))return m.usage==='experimental-research'&&m.size===640&&
     /^[a-f0-9]{40}$/.test(m.revision)&&['checkpointSha256','artifactSha256'].every(k=>/^[a-f0-9]{64}$/.test(m[k]))&&
-    Array.isArray(m.classes)&&m.classes.join(',')===PILOT_SYMBOL_CLASSES.join(',')&&
+    Array.isArray(m.classes)&&m.classes.join(',')===(m.id==='ark-objects-pilot-v2'?VEHICLE_SYMBOL_CLASSES:PILOT_SYMBOL_CLASSES).join(',')&&
     m.training?.independentValidation===false&&m.training.annotationQuality==='agent-provisional'&&
     /^[a-f0-9]{64}$/.test(m.training.datasetSha256)&&Number.isInteger(m.training.images)&&m.training.images>0&&m.training.images<=10000&&
     Number.isInteger(m.training.epochs)&&m.training.epochs>=1&&m.training.epochs<=1000;

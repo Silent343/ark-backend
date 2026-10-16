@@ -2,16 +2,17 @@ import {Worker} from "node:worker_threads";
 import {fail} from "../../../errors.js";
 import {configuredNeuralModels,neuralModelCapabilities} from "./neural-models.js";
 import {NEURAL_MODELS} from "../domain/neural-contract.js";
-import {configuredSymbolModel,symbolCandidateStatus} from "./symbol-model.js";
+import {configuredSymbolModel,configuredSymbolModels,symbolCandidateStatus} from "./symbol-model.js";
 
 let worker,active,queue=[],ready=false,sequence=0,initializing;
 export function neuralStatus() {
   const installed=configuredNeuralModels(), preferred=installed.find(m=>m.manifest.id==="openbim-m2-unet")??installed[0];
   const symbols=configuredSymbolModel();
-  return {available:installed.length>0,ready,busy:!!active,queued:queue.length,model:preferred?.manifest,models:neuralModelCapabilities(),symbols:{available:!!symbols,id:symbols?.manifest.id,label:symbols?.manifest.label,candidate:symbolCandidateStatus(),classes:symbols?.manifest.classes.filter(c=>['chair','table','sofa','bed','plant','stair'].includes(c))??[],unsupported:symbols?.manifest.classes.includes('plant')?[]:['plant']}};
+  const kinds=['chair','table','sofa','bed','plant','stair','vehicle'];
+  return {available:installed.length>0,ready,busy:!!active,queued:queue.length,model:preferred?.manifest,models:neuralModelCapabilities(),symbols:{available:!!symbols,id:symbols?.manifest.id,label:symbols?.manifest.label,candidate:symbolCandidateStatus(),models:configuredSymbolModels().map(m=>({id:m.manifest.id,label:m.manifest.label,candidate:m.candidate,classes:m.manifest.classes})),classes:symbols?.manifest.classes.filter(c=>kinds.includes(c))??[],unsupported:kinds.filter(c=>!symbols?.manifest.classes.includes(c))}};
 }
 function dispatch() {
-  if(ready&&!active&&queue.length){active=queue.shift();worker.postMessage({id:active.id,image:active.image,modelId:active.modelId,focus:active.focus,symbols:active.symbols,details:active.details});}
+  if(ready&&!active&&queue.length){active=queue.shift();worker.postMessage({id:active.id,image:active.image,modelId:active.modelId,focus:active.focus,symbols:active.symbols,details:active.details,symbolModelId:active.symbolModelId});}
 }
 function finish(job,error,data) {
   clearTimeout(job.timer);job.signal?.removeEventListener("abort",job.abort);
@@ -27,7 +28,7 @@ async function initialize() {
   const models=configuredNeuralModels();
   if(!models.length)fail(503,"El detector neuronal no está instalado en este servidor.");
   const symbols=configuredSymbolModel();
-  if(symbols)models.push(symbols);
+  models.push(...configuredSymbolModels());
   initializing=new Promise((resolve,reject)=>{
     const current=new Worker(new URL("./neural-worker.js",import.meta.url),{workerData:{models,symbolModelId:symbols?.manifest.id},execArgv:process.execArgv.filter(a=>!a.startsWith("--input-type"))});
     worker=current;
@@ -45,10 +46,12 @@ async function initialize() {
   });
   return initializing;
 }
-export async function detectNeuralPlan(image,modelId,signal,focus=false,symbols=false,details=false) {
+export async function detectNeuralPlan(image,modelId,signal,focus=false,symbols=false,details=false,symbolModelId) {
   if(typeof focus!=="boolean")fail(422,"Invalid focus option.");
   if(typeof symbols!=="boolean")fail(422,"Invalid symbols option.");
   if(typeof details!=="boolean")fail(422,"Invalid architecture details option.");
+  if(symbolModelId!==undefined&&(typeof symbolModelId!=='string'||!['floorcad-symbols-v1','ark-objects-pilot-v1','ark-objects-pilot-v2'].includes(symbolModelId)))fail(422,'Invalid object model.');
+  if(symbols&&symbolModelId!==undefined&&!configuredSymbolModel(symbolModelId))fail(503,'El modelo de objetos solicitado no está instalado.');
   if(symbols&&!configuredSymbolModel())fail(503,"El detector de mobiliario no está instalado en este servidor.");
   if(typeof image!=="string"||image.length>4_200_000||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(image))fail(422,"Imagen no válida para el detector neuronal.");
   const installed=configuredNeuralModels();
@@ -61,7 +64,7 @@ export async function detectNeuralPlan(image,modelId,signal,focus=false,symbols=
   if(signal?.aborted)throw new Error("Análisis cancelado.");
   if(queue.length+(active?1:0)>=2)fail(429,"El detector está ocupado. Inténtalo cuando termine el análisis.");
   return new Promise((resolve,reject)=>{
-    const job={id:++sequence,image,modelId,focus,symbols,details,resolve,reject,signal,cancelled:false};
+    const job={id:++sequence,image,modelId,focus,symbols,details,symbolModelId,resolve,reject,signal,cancelled:false};
     job.abort=()=>{
       job.cancelled=true;
       if(active!==job)queue=queue.filter(item=>item!==job);

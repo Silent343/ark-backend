@@ -24,9 +24,10 @@ const S=512,N=S*S;
 const colors=[[255,255,255],[43,119,219],[232,146,49],[41,172,148],[151,105,65],[140,115,190],[73,163,187],[75,174,157],[195,148,81],[190,100,85],[75,160,207],[145,145,145],[110,132,150]];
 const spaceColors=[[255,255,255],[136,177,111],[255,255,255],[225,193,125],[170,193,210],[196,166,195],[150,209,205],[207,204,186],[255,255,255],[198,184,155],[190,185,178],[218,211,189]];
 parentPort.postMessage({ready:true});
-parentPort.on("message",async({id,image,modelId,focus=false,symbols=false,details=false})=>{
+parentPort.on("message",async({id,image,modelId,focus=false,symbols=false,details=false,symbolModelId})=>{
   try {
-    const started=performance.now(),{session,manifest}=await loadModel(modelId);
+    const started=performance.now(),focusModelId=focus&&modelId==='ark-architecture-pilot-v2'?'cubicasa-multitask-v1':modelId;
+    let {session,manifest}=await loadModel(focusModelId);
     const bytes=Buffer.from(image.split(",")[1],"base64"),metadata=await sharp(bytes,{limitInputPixels:16_000_000}).metadata();
     if(!metadata.width||!metadata.height||metadata.width>6000||metadata.height>6000)throw new Error("Image dimensions exceed neural inference limits.");
     const sourceSize={width:metadata.width,height:metadata.height};
@@ -47,7 +48,9 @@ parentPort.on("message",async({id,image,modelId,focus=false,symbols=false,detail
     let sourceRegion={x:0,y:0,...sourceSize},reading=await infer(sourceRegion),passes=1;
     if(focus===true) {
       const region=neuralFocus(reading,reading.content,sourceSize);
-      if(region){sourceRegion=region;reading=await infer(region);passes=2;}
+      if(region)sourceRegion=region;
+      if(focusModelId!==modelId){({session,manifest}=await loadModel(modelId));reading=await infer(sourceRegion);passes=2;}
+      else if(region){reading=await infer(region);passes=2;}
     }
     const detailReadings=[];
     if(details)for(const region of architectureTiles(sourceRegion)){
@@ -58,14 +61,14 @@ parentPort.on("message",async({id,image,modelId,focus=false,symbols=false,detail
     for(let i=0;i<N;i++){
       const x=i%S,y=Math.floor(i/S);
       if(x<content.x||x>=content.x+content.width||y<content.y||y>=content.y+content.height)continue;
-      if(spaces && ![0,2,8].includes(spaces.mask[i]) && spaces.scores[i]>=140 && !mask[i]) {
+      if(spaces && ![0,2,8].includes(spaces.mask[i]) && (spaces.coverageScores?.[i]??spaces.scores[i])>=140 && !mask[i]) {
         for(let c=0;c<3;c++)overlay[3*i+c]=Math.round(rgb[3*i+c]*.65+spaceColors[spaces.mask[i]][c]*.35);
       }
       if(mask[i])for(let c=0;c<3;c++)overlay[3*i+c]=Math.round(rgb[3*i+c]*.35+colors[mask[i]][c]*.65);
     }
     const png=await sharp(overlay,{raw:{width:S,height:S,channels:3}}).png().toBuffer();
     let symbolResult;
-    if(symbols){const loaded=await loadModel(workerData.symbolModelId);symbolResult=await inferSymbols(bytes,sourceSize,loaded.session,loaded.manifest,sourceRegion);}
-    parentPort.postMessage({id,data:{width:S,height:S,mask:mask.toString("base64"),scores:scores.toString("base64"),...(detailReadings.length?{details:detailReadings}:{}),...(spaces?{spaces:{classes:spaces.classes,mask:spaces.mask.toString("base64"),scores:spaces.scores.toString("base64")}}:{}),...(symbolResult?{symbols:symbolResult}:{}),scoreKind:"uncalibrated-softmax",content,sourceSize,sourceRegion,passes,overlay:"data:image/png;base64,"+png.toString("base64"),counts,elapsedMs:Math.round(performance.now()-started),model:manifest}});
+    if(symbols){const loaded=await loadModel(symbolModelId??workerData.symbolModelId);symbolResult=await inferSymbols(bytes,sourceSize,loaded.session,loaded.manifest,sourceRegion);}
+    parentPort.postMessage({id,data:{width:S,height:S,mask:mask.toString("base64"),scores:scores.toString("base64"),...(focusModelId!==modelId?{focusModelId}:{}),...(detailReadings.length?{details:detailReadings}:{}),...(spaces?{spaces:{classes:spaces.classes,mask:spaces.mask.toString("base64"),scores:spaces.scores.toString("base64"),coverageScores:spaces.coverageScores.toString('base64')}}:{}),...(symbolResult?{symbols:symbolResult}:{}),scoreKind:"uncalibrated-softmax",content,sourceSize,sourceRegion,passes,overlay:"data:image/png;base64,"+png.toString("base64"),counts,elapsedMs:Math.round(performance.now()-started),model:manifest}});
   }catch(error){parentPort.postMessage({id,error:error.message});}
 });
