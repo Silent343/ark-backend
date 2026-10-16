@@ -3,13 +3,14 @@ import {fail} from "../../../errors.js";
 import {configuredNeuralModels,neuralModelCapabilities} from "./neural-models.js";
 import {NEURAL_MODELS} from "../domain/neural-contract.js";
 import {configuredSymbolModel,configuredSymbolModels,symbolCandidateStatus} from "./symbol-model.js";
+import {modelDeployment} from '../../../shared/infrastructure/models/root.js';
 
 let worker,active,queue=[],ready=false,sequence=0,initializing;
 export function neuralStatus() {
   const installed=configuredNeuralModels(), preferred=installed.find(m=>m.manifest.id==="openbim-m2-unet")??installed[0];
   const symbols=configuredSymbolModel();
   const kinds=['chair','table','sofa','bed','plant','stair','vehicle'];
-  return {available:installed.length>0,ready,busy:!!active,queued:queue.length,model:preferred?.manifest,models:neuralModelCapabilities(),symbols:{available:!!symbols,id:symbols?.manifest.id,label:symbols?.manifest.label,candidate:symbolCandidateStatus(),models:configuredSymbolModels().map(m=>({id:m.manifest.id,label:m.manifest.label,candidate:m.candidate,classes:m.manifest.classes})),classes:symbols?.manifest.classes.filter(c=>kinds.includes(c))??[],unsupported:kinds.filter(c=>!symbols?.manifest.classes.includes(c))}};
+  return {available:installed.length>0,ready,busy:!!active,queued:queue.length,model:preferred?.manifest,models:neuralModelCapabilities(),...(modelDeployment()?{bundle:modelDeployment()}:{}),symbols:{available:!!symbols,id:symbols?.manifest.id,label:symbols?.manifest.label,candidate:symbolCandidateStatus(),models:configuredSymbolModels().map(m=>({id:m.manifest.id,label:m.manifest.label,candidate:m.candidate,classes:m.manifest.classes})),classes:symbols?.manifest.classes.filter(c=>kinds.includes(c))??[],unsupported:kinds.filter(c=>!symbols?.manifest.classes.includes(c))}};
 }
 function dispatch() {
   if(ready&&!active&&queue.length){active=queue.shift();worker.postMessage({id:active.id,image:active.image,modelId:active.modelId,focus:active.focus,symbols:active.symbols,details:active.details,symbolModelId:active.symbolModelId});}

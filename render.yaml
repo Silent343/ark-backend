@@ -6,6 +6,9 @@ services:
     runtime: node
     buildCommand: npm ci
     startCommand: npm start
+    # npm start installs a pinned private model bundle BEFORE starting the API,
+    # when configured. Optional Storage secrets/pins: docs/model-storage.md.
+    # No model download in buildCommand; persistent disks are runtime-only.
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     maxShutdownDelaySeconds: 30

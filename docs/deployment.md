@@ -39,6 +39,8 @@ Referencias: [servicios web de Render](https://render.com/docs/web-services), [c
 
 ## 3. Datos existentes
 
+Para instalar los modelos entrenados sin publicarlos en Git, sigue [Modelos privados en Supabase Storage y Render](model-storage.md). `npm start` verifica el paquete antes de iniciar la API cuando está configurado; sin paquete conserva el arranque normal. Los pesos y los proyectos de la base son despliegues de datos distintos.
+
 Antes de importar, haz una copia de `.data/ark.sqlite` junto con sus archivos `-wal` y `-shm`. En la máquina que conserva esos archivos y puede conectarse a Supabase:
 
 ```powershell

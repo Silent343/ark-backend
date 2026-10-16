@@ -45,6 +45,8 @@ La API usa contraseñas con scrypt, tokens de sesión almacenados como hash, coo
 
 Para la nomenclatura REST y el mapa de vistas del frontend, consulta [docs/api.md](docs/api.md). Para Render y Supabase, consulta [docs/deployment.md](docs/deployment.md).
 
+Para distribuir los modelos ONNX locales como artefactos privados, consulta [docs/model-storage.md](docs/model-storage.md). Incluye preparación, bucket privado, publicación verificable e instalación al arrancar en Render; los planos y checkpoints permanecen fuera del paquete y de Git.
+
 ## Verificación
 
 ```powershell

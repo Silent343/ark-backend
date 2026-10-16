@@ -1,11 +1,10 @@
 import {existsSync, readFileSync} from "node:fs";
 import path from "node:path";
-import {fileURLToPath} from "node:url";
+import {modelRoot} from '../../../shared/infrastructure/models/root.js';
 import {NEURAL_MODELS,validNeuralModel} from "../domain/neural-contract.js";
-const root=fileURLToPath(new URL("../../../../",import.meta.url));
 export function configuredNeuralModels() {
   if(process.env.NODE_ENV==="production" && process.env.ARK_ENABLE_RESEARCH_MODELS!=="1") return [];
-  const paths=Object.values(NEURAL_MODELS).filter(m=>m.directory).map(m=>path.resolve(root,".data/models",m.directory,"model.onnx"));
+  const paths=Object.values(NEURAL_MODELS).filter(m=>m.directory).map(m=>path.resolve(modelRoot(),m.directory,"model.onnx"));
   if(process.env.ARK_NEURAL_MODEL_PATH) paths.unshift(process.env.ARK_NEURAL_MODEL_PATH);
   const found=new Set(),models=[];
   for(const modelPath of paths) {

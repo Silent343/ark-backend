@@ -9,7 +9,11 @@
   },
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "start": "node scripts/start-with-models.mjs",
+    "models:prepare": "node scripts/prepare-model-bundle.mjs",
+    "models:storage:setup": "node scripts/setup-model-storage.mjs",
+    "models:upload": "node scripts/publish-model-bundle.mjs",
+    "models:install": "node scripts/install-model-bundle.mjs",
     "test": "node --test",
     "test:contract": "node scripts/verify-frontend-contract.mjs",
     "db:migrate": "node src/shared/infrastructure/postgres/migrate.js",
