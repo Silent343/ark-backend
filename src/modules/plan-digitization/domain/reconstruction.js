@@ -9,6 +9,9 @@ export function validateReconstruction(plan) {
   const positive = n => finite(n) && n > 0;
   const levels = new Set(plan.levels.map(l => l.id));
   const polygon = p => Array.isArray(p) && p.length >= 3 && p.length <= 10000 && p.every(v => Array.isArray(v) && v.length === 2 && v.every(finite));
+  for(const room of plan.rooms ?? []) if(room.polygon!==undefined || room.holes!==undefined) {
+    if(!polygon(room.polygon)||room.polygon.length>256||!Array.isArray(room.holes)||room.holes.length>32||!room.holes.every(h=>polygon(h)&&h.length<=256)) invalid();
+  }
   for (const key of ["stairs", "roofs"]) if (plan[key] !== undefined && (!Array.isArray(plan[key]) || plan[key].length > 10000 || plan[key].some(item => !item || typeof item !== "object"))) invalid();
   for (const level of plan.levels) {
     if (level.height !== undefined && (!positive(level.height) || level.height > 100)) invalid();

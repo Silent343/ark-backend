@@ -2,6 +2,7 @@ import { fail } from "../../../errors.js";
 import { validateCadPlan } from "./cad-plan.js";
 import { validateReconstruction } from "./reconstruction.js";
 import { validateFixtureFamilies } from "./fixture-families.js";
+import { validateRasterNeural } from "./raster-neural.js";
 
 export function validateBlueprint(geometry, projectId) {
   if (!geometry || typeof geometry !== "object" || Array.isArray(geometry) || geometry.projectId !== projectId)
@@ -18,6 +19,10 @@ export function validateBlueprint(geometry, projectId) {
   }
   if (geometry.cad !== undefined) validateCadPlan(geometry.cad);
   validateReconstruction(geometry);
+  for (const sheet of geometry.sheets ?? []) {
+    if(sheet.neural !== undefined) validateRasterNeural(sheet.neural);
+    if(sheet.analysisImage!==undefined && (typeof sheet.analysisImage!=='string'||sheet.analysisImage.length>4_200_000||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(sheet.analysisImage)))fail(422,'Invalid analysis image.');
+  }
   if (geometry.fixtures !== undefined) {
     if (!Array.isArray(geometry.fixtures) || geometry.fixtures.length > 10000) fail(422, "Invalid CAD fixtures.");
     for (const item of geometry.fixtures) {
@@ -26,7 +31,7 @@ export function validateBlueprint(geometry, projectId) {
         fail(422, "Invalid CAD fixtures.");
       if (item.rotation !== undefined && (!Number.isFinite(item.rotation) || Math.abs(item.rotation) > 36000)) fail(422, "Invalid fixture rotation.");
       if (item.kind !== undefined && !["chair","table","bed","sofa","toilet","sink","cabinet","equipment","plant","vehicle","bench","bathtub","fireplace","chimney"].includes(item.kind)) fail(422, "Invalid fixture kind.");
-      if (item.evidence !== undefined && !["block","repeated-symbol","neural-mask"].includes(item.evidence)) fail(422, "Invalid fixture evidence.");
+      if (item.evidence !== undefined && !["block","repeated-symbol","neural-mask","neural-box"].includes(item.evidence)) fail(422, "Invalid fixture evidence.");
       if (item.sourceIds !== undefined && (!Array.isArray(item.sourceIds) || item.sourceIds.length > 500 || item.sourceIds.some(s => typeof s !== "string" || s.length > 150))) fail(422, "Invalid fixture sources.");
     }
   }

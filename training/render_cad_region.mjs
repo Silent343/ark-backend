@@ -1,0 +1,24 @@
+/** Raster review crops retain a reversible CAD transform; no semantic label is inferred. */
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import sharp from 'sharp';
+import {entityBounds} from './cad_object_geometry.mjs';
+const [input,output,regionJson]=process.argv.slice(2);
+if(!input||!output||!regionJson)throw new Error('Usage: node training/render_cad_region.mjs source.json .data/region.png "[minX,minY,maxX,maxY]"');
+const target=path.resolve(output),root=path.resolve('.data');
+if(!target.startsWith(root+path.sep))throw new Error('Private raster output must remain in .data');
+const bytes=await fs.readFile(input),source=JSON.parse(bytes),shapes=source.shapes??source.cad?.entities;
+const b=JSON.parse(regionJson);
+if(!Array.isArray(shapes)||!Array.isArray(b)||b.length!==4||!b.every(Number.isFinite)||b[2]<=b[0]||b[3]<=b[1])throw new Error('Invalid CAD region');
+const k=1200/Math.max(b[2]-b[0],b[3]-b[1]),width=Math.round((b[2]-b[0])*k),height=Math.round((b[3]-b[1])*k);
+const xy=(x,y)=>[(x-b[0])*width/(b[2]-b[0]),(b[3]-y)*height/(b[3]-b[1])];
+const selected=shapes.filter(s=>{const a=entityBounds(s);return a.every(Number.isFinite)&&a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];});
+const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const lines=selected.map(s=>s.kind==='path'?`<polyline points="${Array.from({length:s.points.length/2},(_,i)=>xy(s.points[i*2],s.points[i*2+1]).join(',')).join(' ')}${s.closed?' '+xy(s.points[0],s.points[1]).join(','):''}" fill="none" stroke="#222" stroke-width=".85"/>`:s.kind==='circle'?`<circle cx="${xy(s.x,s.y)[0]}" cy="${xy(s.x,s.y)[1]}" r="${s.radius*k}" fill="none" stroke="#222" stroke-width=".85"/>`:s.kind==='text'?`<text x="${xy(s.x,s.y)[0]}" y="${xy(s.x,s.y)[1]}" font-size="${Math.min(24,Math.max(5,(s.height??.1)*k))}" fill="#555">${escape(s.value??'').slice(0,200)}</text>`:'').join('');
+await fs.mkdir(path.dirname(target),{recursive:true});
+const png=await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="white"/>${lines}</svg>`)).png().toBuffer();
+await fs.writeFile(target,png,{flag:'wx'});
+const manifest={source:path.basename(input),sourceSha256:createHash('sha256').update(bytes).digest('hex'),sourceHash:source.sourceHash??null,cadBounds:b,width,height,entities:selected.length,annotationStatus:'unlabeled',transform:{xOffset:b[0],yMax:b[3],xUnitsPerPixel:(b[2]-b[0])/width,yUnitsPerPixel:(b[3]-b[1])/height}};
+await fs.writeFile(target+'.json',JSON.stringify(manifest,null,2),{flag:'wx'});
+console.log(JSON.stringify({output:target,...manifest}));

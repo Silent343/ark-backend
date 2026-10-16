@@ -166,7 +166,7 @@ export function createServer(pool) {
       const closed=()=>{if(!response.writableEnded)controller.abort();};
       response.once("close",closed);
       try {
-        const data=await detectNeuralPlan(request.body?.image,request.body?.modelId,controller.signal);
+        const data=await detectNeuralPlan(request.body?.image,request.body?.modelId,controller.signal,request.body?.focus ?? false,request.body?.symbols ?? false,request.body?.details ?? false);
         if(!response.destroyed)json(response,200,{data},common);
       } catch(error) {if(!response.destroyed)throw error;}
       finally {response.off("close",closed);}
